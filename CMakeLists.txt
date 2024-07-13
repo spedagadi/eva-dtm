@@ -21,13 +21,14 @@ find_package(SDL2_image REQUIRED SDL2_image>=2.0.0)
 find_package(glfw3 REQUIRED)
 find_package(Vulkan REQUIRED)
 
-add_executable(eva-dtm main.c window.c
-        window_glfw.c
-        window_sdl.c)
-target_include_directories(eva-dtm PUBLIC 
-    ${LIBPLACEBO_INCLUDE_DIRS}
-    ${SDL2_INCLUDE_DIRS}
-    ${SDL2_image_INCLUDE_DIRS})
+add_executable(eva-dtm src/main.c src/window.c
+        src/window_glfw.c
+        src/window_sdl.c)
+target_include_directories(eva-dtm PUBLIC
+        "${CMAKE_SOURCE_DIR}/include/"
+        ${LIBPLACEBO_INCLUDE_DIRS}
+        ${SDL2_INCLUDE_DIRS}
+        ${SDL2_image_INCLUDE_DIRS})
 
 target_link_libraries(eva-dtm PUBLIC
         ${LIBPLACEBO_LIBRARIES}
