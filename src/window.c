@@ -10,11 +10,15 @@
 #include <timeapi.h>
 #endif
 
-extern const struct window_impl win_impl_glfw_vk;
-extern const struct window_impl win_impl_glfw_gl;
+
+#if defined(WIN32)
 extern const struct window_impl win_impl_glfw_d3d11;
-extern const struct window_impl win_impl_sdl_vk;
-extern const struct window_impl win_impl_sdl_gl;
+#else
+extern const struct window_impl win_impl_glfw_gl;
+#endif
+//#extern const struct window_impl win_impl_glfw_vk;
+//extern const struct window_impl win_impl_sdl_vk;
+//extern const struct window_impl win_impl_sdl_gl;
 
 static const struct window_impl *win_impls[] = {
 #ifdef HAVE_GLFW_VULKAN
@@ -45,8 +49,8 @@ struct window *window_create(pl_log log, const struct window_params *params)
         struct window *win = (*impl)->create(log, params);
         if (win) {
 #ifdef _WIN32
-            if (timeBeginPeriod(1) != TIMERR_NOERROR)
-                fprintf(stderr, "timeBeginPeriod failed!\n");
+            //if (timeBeginPeriod(1) != TIMERR_NOERROR)
+            //    fprintf(stderr, "timeBeginPeriod failed!\n");
 #endif
             return win;
         }
@@ -68,7 +72,7 @@ void window_destroy(struct window **win)
     (*win)->impl->destroy(win);
 
 #ifdef _WIN32
-    timeEndPeriod(1);
+//    timeEndPeriod(1);
 #endif
 }
 

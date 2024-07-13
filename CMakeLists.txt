@@ -22,8 +22,7 @@ find_package(glfw3 REQUIRED)
 find_package(Vulkan REQUIRED)
 
 add_executable(eva-dtm src/main.c src/window.c
-        src/window_glfw.c
-        src/window_sdl.c)
+        src/window_glfw.c)
 target_include_directories(eva-dtm PUBLIC
         "${CMAKE_SOURCE_DIR}/include/"
         ${LIBPLACEBO_INCLUDE_DIRS}

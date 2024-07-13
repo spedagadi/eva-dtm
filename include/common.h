@@ -50,6 +50,7 @@
 
 #include "os.h"
 #include "config_demos.h"
+
 #include "config_internal.h"
 
 #define PL_DEPRECATED_IN(VER)
@@ -189,3 +190,4 @@ typedef atomic_uint_fast32_t pl_rc_t;
           goto error;                                           \
       }                                                         \
   } while (0)
+

@@ -4,16 +4,13 @@
  */
 
 #pragma once
-#define USE_GL
+
+#ifndef WIN32
 #define HAVE_EGL
-
 #define HAVE_GLFW_OPENGL
-
-//#define HAVE_GLFW_VULKAN
-
-#define HAVE_NUKLEAR
-
 #define HAVE_SDL_OPENGL
-
-//#define HAVE_SDL_VULKAN
+#else
+#define HAVE_GLFW_D3D11
+#endif
+#define HAVE_NUKLEAR
 

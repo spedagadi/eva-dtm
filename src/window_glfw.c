@@ -6,6 +6,13 @@
 #include <math.h>
 
 #include "common.h"
+
+#if defined(WIN32)
+#define USE_D3D11
+#else
+#define USE_GL
+#endif
+
 #if defined(USE_GL) + defined(USE_VK) + defined(USE_D3D11) != 1
 #error Specify exactly one of -DUSE_GL, -DUSE_VK or -DUSE_D3D11 when compiling!
 #endif
