@@ -21,10 +21,19 @@ find_package(SDL2_image REQUIRED SDL2_image>=2.0.0)
 find_package(glfw3 REQUIRED)
 find_package(Vulkan REQUIRED)
 
+set(AVERMEDIA_INLCUDES
+        "${CMAKE_SOURCE_DIR}/3rdparty/avermedia/include")
+set(AVERMEDIA_LIBS
+        "${CMAKE_SOURCE_DIR}/3rdparty/avermedia/lib/AVerCapAPI.lib")
+
 add_executable(eva-dtm src/main.c src/window.c
-        src/window_glfw.c)
+        src/window_glfw.c
+        src/avermedia/AVerCapAPI_Pro.c
+        src/avermedia/avermedia_capture.c)
 target_include_directories(eva-dtm PUBLIC
         "${CMAKE_SOURCE_DIR}/include/"
+        "${CMAKE_SOURCE_DIR}/avermedia/"
+        ${AVERMEDIA_INLCUDES}
         ${LIBPLACEBO_INCLUDE_DIRS}
         ${SDL2_INCLUDE_DIRS}
         ${SDL2_image_INCLUDE_DIRS})
@@ -34,4 +43,5 @@ target_link_libraries(eva-dtm PUBLIC
         ${SDL2_LIBRARIES}
         ${SSDL2_image_LIBRARIES}
         glfw
+        ${AVERMEDIA_LIBS}
         PkgConfig::LIBAV)
