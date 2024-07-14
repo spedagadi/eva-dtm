@@ -8,7 +8,7 @@
 #ifndef WIN32
 #define HAVE_EGL
 #define HAVE_GLFW_OPENGL
-#define HAVE_SDL_OPENGL
+//#define HAVE_SDL_OPENGL
 #else
 #define HAVE_GLFW_D3D11
 #endif

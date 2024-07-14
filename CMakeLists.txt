@@ -14,7 +14,7 @@ pkg_check_modules(LIBAV REQUIRED IMPORTED_TARGET
         libavutil
 )
 pkg_check_modules(LIBPLACEBO REQUIRED IMPORTED_TARGET
-    libplacebo)
+        libplacebo)
 set(CMAKE_FIND_LIBRARY_SUFFIXES .a ${CMAKE_FIND_LIBRARY_SUFFIXES})
 find_package(SDL2 REQUIRED)
 find_package(SDL2_image REQUIRED SDL2_image>=2.0.0)
@@ -26,10 +26,16 @@ set(AVERMEDIA_INLCUDES
 set(AVERMEDIA_LIBS
         "${CMAKE_SOURCE_DIR}/3rdparty/avermedia/lib/AVerCapAPI.lib")
 
-add_executable(eva-dtm src/main.c src/window.c
-        src/window_glfw.c
-        src/avermedia/AVerCapAPI_Pro.c
-        src/avermedia/avermedia_capture.c)
+if (WIN32)
+    add_executable(eva-dtm src/main.c src/window.c
+            src/window_glfw.c
+            src/avermedia/AVerCapAPI_Pro.c
+            src/avermedia/avermedia_capture.c)
+else ()
+    add_executable(eva-dtm src/main.c src/window.c
+            src/window_glfw.c)
+endif ()
+
 target_include_directories(eva-dtm PUBLIC
         "${CMAKE_SOURCE_DIR}/include/"
         "${CMAKE_SOURCE_DIR}/avermedia/"
@@ -38,10 +44,19 @@ target_include_directories(eva-dtm PUBLIC
         ${SDL2_INCLUDE_DIRS}
         ${SDL2_image_INCLUDE_DIRS})
 
-target_link_libraries(eva-dtm PUBLIC
-        ${LIBPLACEBO_LIBRARIES}
-        ${SDL2_LIBRARIES}
-        ${SSDL2_image_LIBRARIES}
-        glfw
-        ${AVERMEDIA_LIBS}
-        PkgConfig::LIBAV)
+if (WIN32)
+    target_link_libraries(eva-dtm PUBLIC
+            ${LIBPLACEBO_LIBRARIES}
+            ${SDL2_LIBRARIES}
+            ${SSDL2_image_LIBRARIES}
+            glfw
+            ${AVERMEDIA_LIBS}
+            PkgConfig::LIBAV)
+else ()
+    target_link_libraries(eva-dtm PUBLIC
+            ${LIBPLACEBO_LIBRARIES}
+            ${SDL2_LIBRARIES}
+            ${SSDL2_image_LIBRARIES}
+            glfw
+            PkgConfig::LIBAV)
+endif ()
