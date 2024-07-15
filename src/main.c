@@ -313,7 +313,10 @@ static PL_THREAD_VOID decode_loop(void *arg) {
                     pl_gpu_finish(p->win->gpu);
                 }
                 frame->pts = last_pts - first_pts + base_pts;
-
+                frame->color_primaries = AVCOL_PRI_BT2020;
+                frame->color_range = AVCOL_RANGE_JPEG;
+                frame->color_trc = AVCOL_TRC_BT2020_10;
+                frame->colorspace = AVCOL_SPC_BT2020_NCL;
                 if (p->is_live) {
                     queue_count = pl_queue_num_frames(p->queue);
                     pl_queue_push(p->queue,
