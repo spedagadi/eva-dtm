@@ -17,9 +17,10 @@ pkg_check_modules(LIBPLACEBO REQUIRED IMPORTED_TARGET
         libplacebo)
 set(CMAKE_FIND_LIBRARY_SUFFIXES .a ${CMAKE_FIND_LIBRARY_SUFFIXES})
 find_package(SDL2 REQUIRED)
-find_package(SDL2_image REQUIRED SDL2_image>=2.0.0)
+find_package(SDL2_image REQUIRED)
 find_package(glfw3 REQUIRED)
 find_package(Vulkan REQUIRED)
+find_package(cairo REQUIRED)
 
 set(AVERMEDIA_INLCUDES
         "${CMAKE_SOURCE_DIR}/3rdparty/avermedia/include")
@@ -42,21 +43,25 @@ target_include_directories(eva-dtm PUBLIC
         ${AVERMEDIA_INLCUDES}
         ${LIBPLACEBO_INCLUDE_DIRS}
         ${SDL2_INCLUDE_DIRS}
-        ${SDL2_image_INCLUDE_DIRS})
+        ${SDL2_IMAGE_INCLUDE_DIRS}
+        ${CAIRO_INCLUDE_DIRS})
 
 if (WIN32)
     target_link_libraries(eva-dtm PUBLIC
             ${LIBPLACEBO_LIBRARIES}
             ${SDL2_LIBRARIES}
-            ${SSDL2_image_LIBRARIES}
+            SDL2_image
+            #${SDL2_IMAGE_LIBRARY}
             glfw
             ${AVERMEDIA_LIBS}
-            PkgConfig::LIBAV)
+            PkgConfig::LIBAV
+            cairo)
 else ()
     target_link_libraries(eva-dtm PUBLIC
             ${LIBPLACEBO_LIBRARIES}
             ${SDL2_LIBRARIES}
-            ${SSDL2_image_LIBRARIES}
+            SDL2_image
             glfw
-            PkgConfig::LIBAV)
+            PkgConfig::LIBAV
+            cairo)
 endif ()

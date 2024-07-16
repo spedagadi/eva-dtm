@@ -11,6 +11,9 @@
 #include "pl_clock.h"
 #include "pl_thread.h"
 
+#include "cairo.h"
+#include <SDL.h>
+#include <SDL_image.h>
 #include <libavcodec/avcodec.h>
 #include <libavdevice/avdevice.h>
 #include <libavformat/avformat.h>
@@ -21,7 +24,6 @@
 #include <libavutil/file.h>
 #include <libavutil/imgutils.h>
 #include <libavutil/pixdesc.h>
-
 // #include <libavutil/internal.h>
 #include <libavutil/hwcontext.h>
 #include <libavutil/imgutils.h>
@@ -153,6 +155,15 @@ struct plplay {
   float frame_duration;
   bool is_live;
   float target_luma;
+  bool draw_overlay;
+  struct pl_plane osd_plane;
+  pl_tex osd_tex;
+  cairo_surface_t *osd_cairo_surface;
+  cairo_t *osd_cairo_obj;
+  SDL_Surface *osd_orig_surface;
+  SDL_Surface *osd_render_surface;
+  SDL_Rect osd_rect;
+  char osd_char_arr[128];
 
   // ICC profile
   pl_icc_object icc;
@@ -455,6 +466,160 @@ static void update_colorspace_hint(struct plplay *p,
   pl_swapchain_colorspace_hint(p->win->swapchain, &hint);
 }
 
+static bool upload_plane(struct plplay *p, const SDL_Surface *img, pl_tex *tex,
+                         struct pl_plane *plane) {
+  if (!img)
+    return false;
+
+  SDL_Surface *fixed = NULL;
+  const SDL_PixelFormat *fmt = img->format;
+  if (SDL_ISPIXELFORMAT_INDEXED(fmt->format)) {
+    // libplacebo doesn't handle indexed formats yet
+    fixed = SDL_CreateRGBSurfaceWithFormat(0, img->w, img->h, 32,
+                                           SDL_PIXELFORMAT_ABGR8888);
+    SDL_BlitSurface((SDL_Surface *)img, NULL, fixed, NULL);
+    img = fixed;
+    fmt = img->format;
+  }
+
+  struct pl_plane_data data = {
+      .type = PL_FMT_UNORM,
+      .width = img->w,
+      .height = img->h,
+      .pixel_stride = fmt->BytesPerPixel,
+      .row_stride = img->pitch,
+      .pixels = img->pixels,
+  };
+
+  uint64_t masks[4] = {fmt->Rmask, fmt->Gmask, fmt->Bmask, fmt->Amask};
+  pl_plane_data_from_mask(&data, masks);
+
+  bool ok = pl_upload_plane(p->win->gpu, plane, tex, &data);
+  SDL_FreeSurface(fixed);
+  return ok;
+}
+
+static void format_stats_timing(char *buffer, char *label,
+                                const struct timing *t) {
+  const double avg = t->count ? t->sum / t->count : 0.0;
+  const double stddev = t->count ? sqrt(t->sum2 / t->count - avg * avg) : 0.0;
+  sprintf(buffer, "%s : %.4f ± %.4f ms (%.3f ms)", label, avg * 1e3,
+          stddev * 1e3, t->peak * 1e3);
+}
+
+static void draw_osd(struct plplay *p) {
+  // return;
+  if (p->osd_tex) {
+    mempcpy(p->osd_render_surface->pixels, p->osd_orig_surface->pixels,
+            4 * p->osd_orig_surface->w * p->osd_orig_surface->h);
+    cairo_move_to(p->osd_cairo_obj, 30, 20);
+    sprintf(p->osd_char_arr, "Source (Src) : %s", "File Playback");
+    cairo_show_text(p->osd_cairo_obj, p->osd_char_arr);
+    cairo_move_to(p->osd_cairo_obj, 30, 40);
+    cairo_show_text(p->osd_cairo_obj, "Src Format : ");
+    cairo_move_to(p->osd_cairo_obj, 30, 60);
+    cairo_show_text(p->osd_cairo_obj, "Src True FPS : ");
+    cairo_move_to(p->osd_cairo_obj, 30, 80);
+    cairo_show_text(p->osd_cairo_obj, "Src Resolution : ");
+    cairo_move_to(p->osd_cairo_obj, 30, 100);
+    cairo_show_text(p->osd_cairo_obj, "Src Ingest FPS : ");
+    cairo_move_to(p->osd_cairo_obj, 30, 120);
+    cairo_show_text(p->osd_cairo_obj, "Src Color Range : ");
+    cairo_move_to(p->osd_cairo_obj, 30, 140);
+    cairo_show_text(p->osd_cairo_obj, "Src Color Primaries : ");
+    cairo_move_to(p->osd_cairo_obj, 30, 160);
+    cairo_show_text(p->osd_cairo_obj, "Src Color TRC : ");
+    cairo_move_to(p->osd_cairo_obj, 30, 180);
+    cairo_show_text(p->osd_cairo_obj, "Src Color Space : ");
+    cairo_move_to(p->osd_cairo_obj, 30, 200);
+    cairo_show_text(p->osd_cairo_obj, "Render API : ");
+    cairo_move_to(p->osd_cairo_obj, 30, 220);
+    cairo_show_text(p->osd_cairo_obj, "Target Override : ");
+    cairo_show_text(p->osd_cairo_obj, "Upscaler : ");
+    cairo_move_to(p->osd_cairo_obj, 30, 240);
+    cairo_show_text(p->osd_cairo_obj, "Downscaler : ");
+    cairo_move_to(p->osd_cairo_obj, 30, 260);
+    cairo_show_text(p->osd_cairo_obj, "Frame Mixer : ");
+    cairo_move_to(p->osd_cairo_obj, 30, 280);
+    cairo_show_text(p->osd_cairo_obj, "Antiringing Strength : ");
+    cairo_move_to(p->osd_cairo_obj, 30, 300);
+    cairo_show_text(p->osd_cairo_obj, "Debanding : ");
+    cairo_move_to(p->osd_cairo_obj, 30, 320);
+    cairo_show_text(p->osd_cairo_obj, "HDR Peak Detection : ");
+    cairo_move_to(p->osd_cairo_obj, 30, 340);
+    cairo_show_text(p->osd_cairo_obj, "HDR Smooth Period : ");
+    cairo_move_to(p->osd_cairo_obj, 30, 360);
+    cairo_show_text(p->osd_cairo_obj, "HDR Scene TH Low : ");
+    cairo_move_to(p->osd_cairo_obj, 30, 380);
+    cairo_show_text(p->osd_cairo_obj, "HDR Scene TH High : ");
+    cairo_move_to(p->osd_cairo_obj, 30, 400);
+    cairo_show_text(p->osd_cairo_obj, "HDR Percentile : ");
+    cairo_move_to(p->osd_cairo_obj, 30, 420);
+    cairo_show_text(p->osd_cairo_obj, "HDR Allow Delayed : ");
+    cairo_move_to(p->osd_cairo_obj, 30, 440);
+    cairo_show_text(p->osd_cairo_obj, "Tone Mapping : ");
+    cairo_move_to(p->osd_cairo_obj, 30, 460);
+    cairo_show_text(p->osd_cairo_obj, "Gamut Mapping : ");
+    cairo_move_to(p->osd_cairo_obj, 30, 480);
+    cairo_show_text(p->osd_cairo_obj, "Gamut Expansion : ");
+    cairo_move_to(p->osd_cairo_obj, 30, 500);
+    cairo_show_text(p->osd_cairo_obj, "Target Nits : ");
+    cairo_move_to(p->osd_cairo_obj, 30, 520);
+    cairo_show_text(p->osd_cairo_obj, "Target Color Range : ");
+    cairo_move_to(p->osd_cairo_obj, 30, 540);
+    cairo_show_text(p->osd_cairo_obj, "Target Primaries : ");
+    cairo_move_to(p->osd_cairo_obj, 30, 560);
+    cairo_show_text(p->osd_cairo_obj, "Target TRC : ");
+    cairo_move_to(p->osd_cairo_obj, 30, 580);
+    sprintf(p->osd_char_arr, "Estimated FPS : %.3f", pl_queue_estimate_fps(p->queue));
+    cairo_show_text(p->osd_cairo_obj, p->osd_char_arr);
+    cairo_move_to(p->osd_cairo_obj, 30, 600);
+    sprintf(p->osd_char_arr, "Estimated vsync rate : %.3f", pl_queue_estimate_vps(p->queue));
+    cairo_show_text(p->osd_cairo_obj, p->osd_char_arr);
+    cairo_move_to(p->osd_cairo_obj, 30, 620);
+    sprintf(p->osd_char_arr, "Frames rendered : %d", p->stats.rendered);
+    cairo_show_text(p->osd_cairo_obj, p->osd_char_arr);
+    cairo_move_to(p->osd_cairo_obj, 30, 640);
+    sprintf(p->osd_char_arr, "Decoded frames : %d", p->stats.decoded);
+    cairo_show_text(p->osd_cairo_obj, p->osd_char_arr);
+    cairo_move_to(p->osd_cairo_obj, 30, 660);
+    sprintf(p->osd_char_arr, "Dropped frames : %d", p->stats.dropped);
+    cairo_show_text(p->osd_cairo_obj, p->osd_char_arr);
+    cairo_move_to(p->osd_cairo_obj, 30, 680);
+    sprintf(p->osd_char_arr, "Missed timestamps : %.3f", p->stats.missed_ms);
+    cairo_show_text(p->osd_cairo_obj, p->osd_char_arr);
+    cairo_move_to(p->osd_cairo_obj, 30, 700);
+    sprintf(p->osd_char_arr, "Times stalled : %.3f", p->stats.stalled);
+    cairo_show_text(p->osd_cairo_obj, p->osd_char_arr);
+    cairo_move_to(p->osd_cairo_obj, 30, 720);
+    format_stats_timing(p->osd_char_arr, "Acquire FBO", &p->stats.acquire);
+    cairo_show_text(p->osd_cairo_obj, p->osd_char_arr);
+    cairo_move_to(p->osd_cairo_obj, 30, 740);
+    format_stats_timing(p->osd_char_arr, "Update queue", &p->stats.update);
+    cairo_show_text(p->osd_cairo_obj, p->osd_char_arr);
+    cairo_move_to(p->osd_cairo_obj, 30, 760);
+    format_stats_timing(p->osd_char_arr, "Render frame", &p->stats.render);
+    cairo_show_text(p->osd_cairo_obj, p->osd_char_arr);
+    cairo_move_to(p->osd_cairo_obj, 30, 780);
+    format_stats_timing(p->osd_char_arr, "Volunary sleep", &p->stats.sleep);
+    cairo_show_text(p->osd_cairo_obj, p->osd_char_arr);
+    cairo_move_to(p->osd_cairo_obj, 30, 800);
+    format_stats_timing(p->osd_char_arr, "Submit frame", &p->stats.submit);
+    cairo_show_text(p->osd_cairo_obj, p->osd_char_arr);
+    cairo_move_to(p->osd_cairo_obj, 30, 820);
+    format_stats_timing(p->osd_char_arr, "Swap buffers", &p->stats.swap);
+    cairo_show_text(p->osd_cairo_obj, p->osd_char_arr);
+    cairo_move_to(p->osd_cairo_obj, 30, 840);
+    format_stats_timing(p->osd_char_arr, "Vsync interval", &p->stats.vsync_interval);
+    cairo_show_text(p->osd_cairo_obj, p->osd_char_arr);
+    cairo_move_to(p->osd_cairo_obj, 30, 860);
+    format_stats_timing(p->osd_char_arr, "PTS interval", &p->stats.pts_interval);
+    cairo_show_text(p->osd_cairo_obj, p->osd_char_arr);
+    if (!upload_plane(p, p->osd_render_surface, &p->osd_tex, &p->osd_plane))
+      fprintf(stderr, "Failed uploading OSD plane.. continuing anyway\n");
+  }
+}
+
 static bool render_frame(struct plplay *p,
                          const struct pl_swapchain_frame *frame,
                          const struct pl_frame_mix *mix) {
@@ -531,6 +696,27 @@ static bool render_frame(struct plplay *p,
     cpars->visualize_rect = (pl_rect2df){0, 0, 1, 1};
     float tar = pl_rect2df_aspect(&target.crop);
     pl_rect2df_aspect_set(&cpars->visualize_rect, 1.0f / tar, 0.0f);
+  }
+
+  struct pl_overlay osd;
+  struct pl_overlay_part osd_part;
+  if (p->osd_tex) {
+    draw_osd(p);
+    osd_part = (struct pl_overlay_part){
+        .src = {0, 0, p->osd_tex->params.w, p->osd_tex->params.h},
+        .dst = {15, 150, p->osd_tex->params.w, p->osd_tex->params.h},
+    };
+    osd = (struct pl_overlay){
+        .tex = p->osd_tex,
+        .mode = PL_OVERLAY_NORMAL,
+        .repr = target.repr,
+        .color = target.color,
+        .coords = PL_OVERLAY_COORDS_DST_FRAME,
+        .parts = &osd_part,
+        .num_parts = 1,
+    };
+    target.overlays = &osd;
+    target.num_overlays = 1;
   }
 
   pl_clock_t ts_pre = pl_clock_now();
@@ -974,6 +1160,19 @@ static bool init_codec(struct plplay *p) {
   return true;
 }
 
+SDL_Surface *duplicate_osd_surface(SDL_Surface *surf) {
+  SDL_Surface *cpy;
+  cpy = (SDL_Surface *)malloc(sizeof(SDL_Surface));
+  memcpy((SDL_Surface *)cpy, (SDL_Surface *)surf, sizeof(SDL_Surface));
+  cpy->format = (SDL_PixelFormat *)malloc(sizeof(SDL_PixelFormat));
+  memcpy((SDL_PixelFormat *)cpy->format, (SDL_PixelFormat *)surf->format,
+         sizeof(SDL_PixelFormat));
+  size_t size = surf->pitch * surf->h;
+  cpy->pixels = malloc(size);
+  memcpy((Uint8 *)cpy->pixels, (Uint8 *)surf->pixels, size * sizeof(Uint8));
+  return cpy;
+}
+
 int main(int argc, char *argv[]) {
   // printf("Hello, from eva-dtm!\n");
   state.target_override = true;
@@ -986,8 +1185,8 @@ int main(int argc, char *argv[]) {
   state.args.hwdec = true;
   state.num_frames = 0;
   state.args.verbosity = PL_LOG_WARN;
-  state.args.hwdec = true;
   state.toggle_fullscreen = false;
+  state.draw_overlay = true;
   struct pl_log_params log_params;
   log_params.log_cb = pl_log_color;
   log_params.log_level = state.args.verbosity;
@@ -1037,12 +1236,12 @@ int main(int argc, char *argv[]) {
   //  #endif
   struct plplay *p = &state;
 
-  char *mp4_file = "D://Videos//HDRDemo//Exodus.mp4";
+  char *mp4_file = "D://Videos//HDRDemo//Exodus_90min.mkv";
   // char *mp4_file = "D://Videos//HDRDemo//Bi-directional_smoothing.mp4";
-  // if (!open_file(p, mp4_file))
-  //  return -1;
-  if (!open_device(p, "/dev/video0"))
+  if (!open_file(p, mp4_file))
     return -1;
+  // if (!open_device(p, "/dev/video0"))
+  //   return -1;
   const AVCodecParameters *par = p->stream->codecpar;
   const AVPixFmtDescriptor *desc = av_pix_fmt_desc_get(par->format);
   if (!desc)
@@ -1063,6 +1262,31 @@ int main(int argc, char *argv[]) {
     return -1;
   }
   window_toggle_fullscreen(p->win, true);
+  // p->osd_tex = NULL;
+  if (p->draw_overlay) {
+    char *overlay_file = "D://Videos//HDRDemo//overlay.png";
+    p->osd_orig_surface = IMG_Load(overlay_file);
+    p->osd_render_surface = IMG_Load(overlay_file);
+
+    p->osd_rect.x = 0;
+    p->osd_rect.y = 0;
+    p->osd_rect.w = p->osd_orig_surface->w;
+    p->osd_rect.h = p->osd_orig_surface->h;
+    SDL_BlitSurface(p->osd_orig_surface, &p->osd_rect, p->osd_render_surface,
+                    &p->osd_rect);
+    p->osd_cairo_surface = cairo_image_surface_create_for_data(
+        p->osd_render_surface->pixels, CAIRO_FORMAT_ARGB32,
+        p->osd_render_surface->w, p->osd_render_surface->h,
+        p->osd_render_surface->pitch);
+    p->osd_cairo_obj = cairo_create(p->osd_cairo_surface);
+    cairo_select_font_face(p->osd_cairo_obj, "calibri", CAIRO_FONT_SLANT_NORMAL,
+                           CAIRO_FONT_WEIGHT_BOLD);
+    cairo_set_font_size(p->osd_cairo_obj, 20);
+    cairo_set_source_rgb(p->osd_cairo_obj, 0, 255, 255);
+    if (!upload_plane(p, p->osd_render_surface, &p->osd_tex, &p->osd_plane))
+      fprintf(stderr, "Failed uploading OSD plane.. continuing anyway\n");
+    // SDL_FreeSurface(p->osd_surface);
+  }
   if (!init_codec(p))
     return -1;
   p->decoder_queue = (AVFrameQueue *)malloc(sizeof(AVFrameQueue *));
