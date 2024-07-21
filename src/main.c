@@ -768,16 +768,16 @@ static bool render_frame(struct plplay *p,
   pl_clock_t ts_pre = pl_clock_now();
   if (!pl_render_image_mix(p->renderer, mix, &target, &opts->params))
     return false;
-  struct pl_rect3d plsrc = {0}, pldst = {0};
-  plsrc.x0 = 0;
-  plsrc.y0 = 0;
-  plsrc.x1 = p->codec->width;
-  plsrc.y1 = p->codec->height;
-  pldst.x0 = 0;
-  pldst.y0 = 0;
-  pldst.x1 = p->codec->width;
-  pldst.y1 = p->codec->height;
   if (!render_swapchain) {
+    struct pl_rect3d plsrc = {0}, pldst = {0};
+    plsrc.x0 = 0;
+    plsrc.y0 = 0;
+    plsrc.x1 = p->codec->width;
+    plsrc.y1 = p->codec->height;
+    pldst.x0 = 0;
+    pldst.y0 = 0;
+    pldst.x1 = p->codec->width;
+    pldst.y1 = p->codec->height;
     struct pl_tex_blit_params blit_params = {p->fbo, frame->fbo, plsrc, pldst,
                                              PL_TEX_SAMPLE_NEAREST};
     pl_tex_blit(p->win->gpu, &blit_params);
