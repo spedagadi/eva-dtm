@@ -3,3 +3,4 @@ cmake-build-debug/
 cmake-build-release/
 *.lib
 *.exe
+dvr-000000.png

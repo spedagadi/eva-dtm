@@ -21,6 +21,7 @@ find_package(SDL2_image REQUIRED)
 find_package(glfw3 REQUIRED)
 find_package(Vulkan REQUIRED)
 find_package(cairo REQUIRED)
+find_package(OpenGL REQUIRED)
 
 set(AVERMEDIA_INLCUDES
         "${CMAKE_SOURCE_DIR}/3rdparty/avermedia/include")
@@ -55,7 +56,8 @@ if (WIN32)
             glfw
             ${AVERMEDIA_LIBS}
             PkgConfig::LIBAV
-            cairo)
+            cairo
+            ${OPENGL_LIBRARIES})
 else ()
     target_link_libraries(eva-dtm PUBLIC
             ${LIBPLACEBO_LIBRARIES}
@@ -63,5 +65,6 @@ else ()
             SDL2_image
             glfw
             PkgConfig::LIBAV
-            cairo)
+            cairo
+            ${OPENGL_LIBRARIES})
 endif ()

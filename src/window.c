@@ -13,6 +13,7 @@
 
 #if defined(WIN32)
 extern const struct window_impl win_impl_glfw_d3d11;
+//extern const struct window_impl win_impl_glfw_vk;
 #else
 extern const struct window_impl win_impl_glfw_gl;
 #endif
@@ -124,4 +125,8 @@ const char *window_get_clipboard(const struct window *win)
 void window_set_clipboard(const struct window *win, const char *text)
 {
     win->impl->set_clipboard(win, text);
+}
+
+void window_get_frame(const struct window *win, int width, int height, void *dst_data) {
+    win->impl->get_frame(win, width, height, dst_data);
 }
